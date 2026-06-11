@@ -120,8 +120,13 @@ router.post('/:id/certificate', (req: AuthRequest, res: Response) => {
       return;
     }
 
+    if (!certificate_url || !finish_time) {
+      res.status(400).json({ error: '请填写完赛成绩和证书链接' });
+      return;
+    }
+
     db.prepare('UPDATE registrations SET certificate_url = ?, finish_time = ? WHERE id = ?')
-      .run(certificate_url || '', finish_time || '', req.params.id);
+      .run(certificate_url, finish_time, req.params.id);
 
     res.json({ data: { message: '上传成功' } });
   } catch (err: unknown) {

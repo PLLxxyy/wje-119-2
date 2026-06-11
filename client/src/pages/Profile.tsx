@@ -76,11 +76,15 @@ export default function Profile() {
   };
 
   const handleUploadCert = async (regId: number) => {
+    if (!finishTime.trim() || !certUrl.trim()) {
+      alert('请填写完赛成绩和证书链接');
+      return;
+    }
     setUploadingId(regId);
     try {
       await api.post(`/registrations/${regId}/certificate`, {
-        certificate_url: certUrl,
-        finish_time: finishTime,
+        certificate_url: certUrl.trim(),
+        finish_time: finishTime.trim(),
       });
       fetchRegistrations();
       setFinishTime('');
@@ -251,7 +255,7 @@ export default function Profile() {
                   <button
                     className="btn btn-secondary"
                     onClick={() => handleUploadCert(reg.id)}
-                    disabled={uploadingId === reg.id && (!finishTime || !certUrl)}
+                    disabled={uploadingId !== reg.id || !finishTime.trim() || !certUrl.trim()}
                   >
                     上传
                   </button>
