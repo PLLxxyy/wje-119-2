@@ -112,7 +112,8 @@ router.post('/:id/pay', (req: AuthRequest, res: Response) => {
 
 router.post('/:id/certificate', (req: AuthRequest, res: Response) => {
   try {
-    const { certificate_url, finish_time } = req.body;
+    const certificateUrl = typeof req.body.certificate_url === 'string' ? req.body.certificate_url.trim() : '';
+    const finishTime = typeof req.body.finish_time === 'string' ? req.body.finish_time.trim() : '';
     const reg = db.prepare('SELECT * FROM registrations WHERE id = ? AND user_id = ?').get(req.params.id, req.userId!) as Record<string, unknown> | undefined;
 
     if (!reg) {
@@ -120,13 +121,13 @@ router.post('/:id/certificate', (req: AuthRequest, res: Response) => {
       return;
     }
 
-    if (!certificate_url || !finish_time) {
+    if (!certificateUrl || !finishTime) {
       res.status(400).json({ error: '请填写完赛成绩和证书链接' });
       return;
     }
 
     db.prepare('UPDATE registrations SET certificate_url = ?, finish_time = ? WHERE id = ?')
-      .run(certificate_url, finish_time, req.params.id);
+      .run(certificateUrl, finishTime, req.params.id);
 
     res.json({ data: { message: '上传成功' } });
   } catch (err: unknown) {

@@ -3,19 +3,33 @@ import path from 'path';
 import fs from 'fs';
 import bcrypt from 'bcryptjs';
 
-const dataDir = path.join(__dirname, '..', 'data');
+const dataDir = process.env.DB_DIR || path.join(__dirname, '..', 'data');
 if (!fs.existsSync(dataDir)) {
   fs.mkdirSync(dataDir, { recursive: true });
 }
 
-const dbPath = path.join(dataDir, 'marathon.db');
-const db = new Database(dbPath);
+const dbPath = process.env.DB_PATH || path.join(dataDir, 'marathon.db');
+let db: Database.Database;
 
-db.pragma('journal_mode = WAL');
-db.pragma('foreign_keys = ON');
+export function getDatabase(): Database.Database {
+  if (!db) {
+    db = new Database(dbPath);
+    db.pragma('journal_mode = WAL');
+    db.pragma('foreign_keys = ON');
+  }
+  return db;
+}
+
+export function closeDatabase(): void {
+  if (db) {
+    db.close();
+    (db as unknown) = null;
+  }
+}
 
 export function initDatabase(): void {
-  db.exec(`
+  const instance = getDatabase();
+  instance.exec(`
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       username TEXT UNIQUE NOT NULL,
@@ -75,15 +89,16 @@ export function initDatabase(): void {
 }
 
 function seedData(): void {
-  const existingAdmin = db.prepare('SELECT id FROM users WHERE username = ?').get('admin');
+  const instance = getDatabase();
+  const existingAdmin = instance.prepare('SELECT id FROM users WHERE username = ?').get('admin');
   if (!existingAdmin) {
     const hash = bcrypt.hashSync('admin123', 10);
-    db.prepare(
+    instance.prepare(
       'INSERT INTO users (username, email, password_hash, role, phone) VALUES (?, ?, ?, ?, ?)'
     ).run('admin', 'admin@marathon.com', hash, 'admin', '13800000000');
   }
 
-  const eventCount = db.prepare('SELECT COUNT(*) as count FROM events').get() as { count: number };
+  const eventCount = instance.prepare('SELECT COUNT(*) as count FROM events').get() as { count: number };
   if (eventCount.count === 0) {
     const now = new Date();
     const futureDate1 = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000);
@@ -93,12 +108,12 @@ function seedData(): void {
     const deadline2 = new Date(now.getTime() + 45 * 24 * 60 * 60 * 1000);
     const deadline3 = new Date(now.getTime() + 20 * 24 * 60 * 60 * 1000);
 
-    const insertEvent = db.prepare(`
+    const insertEvent = instance.prepare(`
       INSERT INTO events (name, city, date, route_description, start_point, end_point, cutoff_time, fee, supplies, status, image_url, registration_deadline)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
-    const insertProject = db.prepare(`
+    const insertProject = instance.prepare(`
       INSERT INTO event_projects (event_id, name, distance, max_participants, current_count)
       VALUES (?, ?, ?, ?, ?)
     `);
@@ -163,4 +178,9 @@ function seedData(): void {
   }
 }
 
-export default db;
+export default new Proxy({} as Database.Database, {
+  get(_target, prop) {
+    const instance = getDatabase();
+    return (instance as unknown as Record<string, unknown>)[prop as string];
+  },
+});
